@@ -1,0 +1,37 @@
+name: Patch cursor text
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch cursor text labels
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          old = "function cursorText(price,count){if(count<=0)return null;if(price<10000)return count===1?'真菜':'菜到头了';if(count===1)return '不错';if(count===2)return '嗷呦';return '很不错'}"
+          new = "function cursorText(price,count){if(count<=0)return null;if(price<10000){if(count===1)return '菜';if(count===2)return '真菜';return '菜到头了'}if(count===1)return '不错';if(count===2)return '嗷呦不错';return '有前途'}"
+          if old not in text:
+              raise SystemExit('target cursorText function not found')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add index.html
+            git commit -m "Fix cursor save label progression"
+            git push
+          fi
