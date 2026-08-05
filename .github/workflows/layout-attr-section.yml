@@ -1,0 +1,49 @@
+name: Layout attr section
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move attr fields below main form
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          text = p.read_text(encoding='utf-8')
+          old = text
+
+          css_old = ".form{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}"
+          css_new = ".form{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}.attr-title{margin:16px 0 8px;padding-top:14px;border-top:1px solid var(--line);color:#e5e7eb;font-weight:900;font-size:14px}.attr-form{margin-bottom:0}"
+          text = text.replace(css_old, css_new)
+
+          weapon_old = "<div class='field'><label>太阳石每段伤害</label><input id='sunDamagePerLevel' type='number' min='0' step='0.1' value='8'></div><div class='field'><label>双加每点估值 / 万</label><input id='weaponAttrPointPrice' type='number' min='0' step='1' value='0'></div><div class='field'><label>附加属性1</label><select id='weaponAttr1'></select></div><div class='field'><label>属性1数值</label><input id='weaponAttrVal1' type='number' step='1' value='0'></div><div class='field'><label>附加属性2</label><select id='weaponAttr2'></select></div><div class='field'><label>属性2数值</label><input id='weaponAttrVal2' type='number' step='1' value='0'></div></div>"
+          weapon_new = "<div class='field'><label>太阳石每段伤害</label><input id='sunDamagePerLevel' type='number' min='0' step='0.1' value='8'></div></div><input id='weaponAttrPointPrice' type='hidden' value='0'><div class='attr-title'>附加属性</div><div class='form attr-form'><div class='field'><label>附加属性1</label><select id='weaponAttr1'></select></div><div class='field'><label>属性1数值</label><input id='weaponAttrVal1' type='number' step='1' value='0'></div><div class='field'><label>附加属性2</label><select id='weaponAttr2'></select></div><div class='field'><label>属性2数值</label><input id='weaponAttrVal2' type='number' step='1' value='0'></div></div>"
+          text = text.replace(weapon_old, weapon_new)
+
+          armor_old = "<div class='field'><label id='armorPerLabel'>月亮石每段防御</label><input id='armorGemPerLevel' type='number' min='0' step='0.1' value='12'></div><div class='field'><label>双加每点估值 / 万</label><input id='armorAttrPointPrice' type='number' min='0' step='1' value='0'></div><div class='field'><label>附加属性1</label><select id='armorAttr1'></select></div><div class='field'><label>属性1数值</label><input id='armorAttrVal1' type='number' step='1' value='0'></div><div class='field'><label>附加属性2</label><select id='armorAttr2'></select></div><div class='field'><label>属性2数值</label><input id='armorAttrVal2' type='number' step='1' value='0'></div></div>"
+          armor_new = "<div class='field'><label id='armorPerLabel'>月亮石每段防御</label><input id='armorGemPerLevel' type='number' min='0' step='0.1' value='12'></div></div><input id='armorAttrPointPrice' type='hidden' value='0'><div class='attr-title'>附加属性</div><div class='form attr-form'><div class='field'><label>附加属性1</label><select id='armorAttr1'></select></div><div class='field'><label>属性1数值</label><input id='armorAttrVal1' type='number' step='1' value='0'></div><div class='field'><label>附加属性2</label><select id='armorAttr2'></select></div><div class='field'><label>属性2数值</label><input id='armorAttrVal2' type='number' step='1' value='0'></div></div>"
+          text = text.replace(armor_old, armor_new)
+
+          if text == old:
+              raise SystemExit('nothing changed')
+          p.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet; then
+            git add index.html
+            git commit -m "Move attr fields into separate lower section"
+            git push
+          fi
