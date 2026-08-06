@@ -1,0 +1,46 @@
+name: Finalize attr panel once
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch final attr panel
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old=s
+          s=s.replace('.float-attr-panel{position:fixed;right:calc((100vw - min(980px,100vw))/2 + 16px);top:82px;z-index:9000;width:min(380px,calc(100vw - 24px));max-height:78vh;overflow:auto;display:none;', '.float-attr-panel{position:fixed;right:calc((100vw - min(980px,100vw))/2 + 16px);top:82px;z-index:9000;width:min(320px,calc(100vw - 24px));max-height:68vh;overflow:auto;display:none;')
+          s=s.replace('.float-attr-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}', '.float-attr-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;cursor:move;user-select:none}')
+          drag="""
+function initFloatDrag(){const panel=$('attrFloatPanel');if(!panel||panel.dataset.dragReady)return;panel.dataset.dragReady='1';const head=panel.querySelector('.float-attr-head');let down=false,sx=0,sy=0,sl=0,st=0;head.addEventListener('mousedown',e=>{if(e.target.closest('button'))return;down=true;const r=panel.getBoundingClientRect();sx=e.clientX;sy=e.clientY;sl=r.left;st=r.top;panel.style.right='auto';panel.style.left=sl+'px';panel.style.top=st+'px';document.body.style.userSelect='none'});document.addEventListener('mousemove',e=>{if(!down)return;const left=Math.max(8,Math.min(window.innerWidth-panel.offsetWidth-8,sl+e.clientX-sx));const top=Math.max(8,Math.min(window.innerHeight-panel.offsetHeight-8,st+e.clientY-sy));panel.style.left=left+'px';panel.style.top=top+'px'});document.addEventListener('mouseup',()=>{down=false;document.body.style.userSelect=''})}
+"""
+          if 'function initFloatDrag()' not in s:
+              s=s.replace('function initFloatAttr(){',drag+'function initFloatAttr(){',1)
+          s=s.replace('calcFloatAttr()}\nfunction initEvents(){','calcFloatAttr();initFloatDrag()}\nfunction initEvents(){',1)
+          if s==old:
+              raise SystemExit('no changes')
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Verify and commit
+        run: |
+          grep -q "initFloatDrag" index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html .github/workflows/finalize-attr-panel.yml
+          git commit -m "Finalize draggable compact attr panel" || exit 0
+          git rm .github/workflows/finalize-attr-panel.yml
+          git commit -m "Remove temporary finalize workflow" || exit 0
+          git push
