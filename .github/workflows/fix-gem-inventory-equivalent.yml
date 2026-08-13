@@ -1,0 +1,60 @@
+name: Fix gem inventory equivalent once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/trigger-fix-gem-inventory-equivalent-*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch inventory equivalent logic
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
+          old=s
+
+          s=s.replace('<thead><tr><th>宝石等级</th><th>本次需要</th><th>仓库/合成可用</th><th>还需购买</th><th>缺口折合1级</th></tr></thead><tbody id="buyGemBody"></tbody>', '<thead><tr><th>补充方式</th><th>单颗折合1级</th><th>还需购买</th><th>买后富余</th></tr></thead><tbody id="buyGemBody"></tbody>')
+          s=s.replace('仓库已有宝石会按等级向上合成后抵扣对应段数；当前升目标时会显示每一段还缺几颗对应等级宝石。', '仓库已有宝石会先按等级折合成1级数量再抵扣；下表显示如果只买某个等级宝石，需要买多少个。')
+
+          pattern = r"function analyzeGemNeed\(cur,target,stock,mode\)\{.*?\}\nfunction calcGem\(\)"
+          repl = "function analyzeGemNeed(cur,target,stock,mode){const need=mode==='single'?p2(target-1):p2(target)-p2(cur);let ownedEq=0;for(let lv=1;lv<=target;lv++)ownedEq+=(stock[lv]||0)*p2(lv-1);const missingEq=Math.max(0,need-ownedEq),rows=[];for(let lv=1;lv<=target;lv++){const unit=p2(lv-1),buy=Math.ceil(missingEq/unit),extra=buy*unit-missingEq;rows.push({lv,unit,buy,extra})}return{rows,missingEq,ownedEq}}\nfunction calcGem()"
+          s,n = re.subn(pattern, repl, s, count=1)
+          if n != 1:
+              raise SystemExit('replace analyzeGemNeed failed')
+
+          pattern2 = r"function renderBuyGemTable\(rows\)\{.*?\}\nfunction weaponGemBasePrice"
+          repl2 = "function renderBuyGemTable(rows){const body=$('buyGemBody');body.innerHTML='';rows.forEach(r=>{const tr=document.createElement('tr');tr.innerHTML=`<td><b>买${r.lv}级补足</b></td><td>${fmt(r.unit)}个1级</td><td>${fmt(r.buy)}个</td><td>${fmt(r.extra)}个1级</td>`;body.appendChild(tr)})}\nfunction weaponGemBasePrice"
+          s,n = re.subn(pattern2, repl2, s, count=1)
+          if n != 1:
+              raise SystemExit('replace renderBuyGemTable failed')
+
+          required = ['const missingEq=Math.max(0,need-ownedEq)', '买${r.lv}级补足', '单颗折合1级', '仓库已有宝石会先按等级折合成1级数量再抵扣']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('verification failed: '+', '.join(missing))
+          if s==old:
+              raise SystemExit('nothing changed')
+          p.write_text(s,encoding='utf-8')
+          Path('.github/workflows/fix-gem-inventory-equivalent.yml').unlink(missing_ok=True)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html .github/workflows/fix-gem-inventory-equivalent.yml
+          if ! git diff --cached --quiet; then
+            git commit -m "Fix gem inventory deduction by equivalent level-one value"
+            git push
+          fi
