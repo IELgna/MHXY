@@ -1,0 +1,24 @@
+name: One time hide number spinners
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/trigger-hide-spinners-*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    if: github.actor != 'github-actions[bot]'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch index and remove workflow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text(encoding='utf-8')
